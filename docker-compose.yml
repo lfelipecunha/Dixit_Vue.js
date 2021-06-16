@@ -1,0 +1,16 @@
+version: "3.0"
+services: 
+    dixit_client:
+        build: client
+        image: dixit
+        volumes: 
+            - "./client:/client"
+        ports: 
+            - 8080:8080
+    dixit_server:
+        build: server
+        image: dixit_server
+        volumes: 
+            - "./server:/server"
+        ports: 
+            - 8081:8081
