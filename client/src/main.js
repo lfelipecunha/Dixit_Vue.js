@@ -14,7 +14,7 @@ import VueSocketIO from 'vue-socket.io'
 
 Vue.use(new VueSocketIO({
     debug: true,
-    connection: 'http://localhost:8081',
+    connection: 'http://localhost:8080',
     vuex: {
         actionPrefix: 'SOCKET_',
         mutationPrefix: 'SOCKET_'
