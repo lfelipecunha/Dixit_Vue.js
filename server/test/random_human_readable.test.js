@@ -9,6 +9,7 @@ test.each([10, 9, 3])("Gerenate a random string: length $length", (length) => {
 })
 
 test("Error when generate with a random string with length less than 3", () => {
+    expect.assertions(2)
     expect(() => {random_human_readable(1)}).toThrow()
     expect(() => {random_human_readable(2)}).toThrow()
 })

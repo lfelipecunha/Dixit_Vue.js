@@ -809,7 +809,7 @@ test("End Turn", async () => {
     }
 })
 
-test.each([
+test.concurrent.each([
     { player_guesses: [-1, -1, -1, -1], player_points: [0, 2, 2, 2, 2]}, // everybody guess it right with 4 players
     { player_guesses: [1, 0, 0], player_points: [0, 4, 3, 2]}, // nobody guess it right
     { player_guesses: [-1, 0, 0], player_points: [3, 5, 0, 0]}, // one player got it righ and other players choose his card
