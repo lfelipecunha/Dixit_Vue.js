@@ -1,9 +1,11 @@
-var mongo = require('mongodb')
-var Game = require("../game.js")
-var Player = require("../player.js")
-var settings = require('../settings.js')
+const mongo = require('mongodb')
+const Game = require("../game.js")
+const Player = require("../player.js")
+const settings = require('../settings.js')
 
-var dbClient = new mongo.MongoClient("mongodb://database:27017")
+const mongoURL = process.env.MONGOURL || "mongodb://database:27017"
+
+var dbClient = new mongo.MongoClient(mongoURL)
 var database = null
 beforeAll(async () => {
     await dbClient.connect()

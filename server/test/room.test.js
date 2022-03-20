@@ -1,7 +1,9 @@
-var mongo = require('mongodb')
-var Room = require("../room.js")
+const mongo = require('mongodb')
+const Room = require("../room.js")
 
-var dbClient = new mongo.MongoClient("mongodb://database:27017")
+const mongoURL = process.env.MONGOURL || "mongodb://database:27017"
+
+var dbClient = new mongo.MongoClient(mongoURL)
 var database = null
 beforeAll(async () => {
     await dbClient.connect()
