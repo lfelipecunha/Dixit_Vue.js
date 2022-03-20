@@ -29,10 +29,10 @@ class Room {
     }
 
     async setStatus(status) {
-        if (!keys(settings.room.status).includes(status)) {
+        if (!Object.values(settings.room.status).includes(status)) {
             throw 'Invalid room status ' & status
         }
-        this._update({status: status})
+        return this._update({status: status})
     }
 
     async getPlayers() {
@@ -57,13 +57,70 @@ class Room {
         return this._update({current_player: player_id})
     }
 
+    async getCurrentPlayerId() {
+      return (await this.getData()).current_player
+    }
+
     async isStarted() {
         var data = await this.getData()
         return data.status >= settings.room.status.STARTED
     }
 
     async canJoinNewPlayer() {
-        return (await this._getNumberOfPlayers()) < settings.room.MAX_PLAYERS
+        return (await this._getNumberOfPlayers()) < settings.room.MAX_PLAYERS && !(await this.isStarted())
+    }
+
+    async canChooseACard(player) {
+      let data = await this.getData()
+      if (!player || data.status < settings.room.status.STARTED || data.status > settings.room.status.CHOOSE_SIMILAR_CARD) {
+        return false
+      }
+
+      let playerId = (await player.getData())._id.toString()
+      if (data.status == settings.room.status.STARTED && data.current_player.toString() != playerId) {
+        return false
+      }
+
+      let can = true
+      for (let i in data.chosen_cards) {
+        let choose = data.chosen_cards[i]
+        if (choose.player.toString() == playerId) {
+          can = false
+          break
+        }
+      }
+      return can
+    }
+
+    async setChosenCard(card) {
+      let updatedData = {
+        chosen_cards: [
+          { card: card, player: await this.getCurrentPlayerId() }
+        ],
+        status: settings.room.status.CHOOSE_SIMILAR_CARD,
+        correct_card: card
+      }
+      return this._update(updatedData)
+    }
+
+    async addChosenCard(player, card) {
+      let data = await this.getData()
+      data.chosen_cards.push({player: (await player.getData())._id, card: card})
+      let updatedData = {
+        chosen_cards: data.chosen_cards
+      }
+
+     /* if (data.chosen_cards.length == (await this.getPlayers()).length) {
+        updatedData.status = settings.room.status.FIND_SIMILAR_CARD
+      }*/
+
+      return this._update(updatedData)
+    }
+
+    async areAllPlayersReady() {
+      var total_ready = await this.playersCollection.countDocuments({room: this.code, game_status: settings.player.game_status.READY})
+      var total = await this.playersCollection.countDocuments({room: this.code})
+      return (total-total_ready) === 0
     }
 
     // PRIVATE METHODS

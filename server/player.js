@@ -11,6 +11,10 @@ class Player {
         this.room = room
     }
 
+    async getData() {
+      return this._getPlayerBySocketId(this.socket_id)
+    }
+
     async register(name) {
         if (
             !name ||
@@ -41,11 +45,27 @@ class Player {
         return this._update({game_status: game_status})
     }
 
+    async chooseCard(card) {
+      let data = await this.getData()
+      let index = data.cards.indexOf(card)
+      if (index == -1) {
+        return false
+      }
+
+      data.cards.splice(index, 1)
+      await this.setHand(data.cards)
+      await this.setGameStatus(settings.player.game_status.READY)
+
+      return true
+    }
+
+    // PRIVATE METHODS
     async _update(data) {
         var result = await this.collection.updateOne({socket_id: this.socket_id}, {$set: data})
 
         return result.result.ok == 1
     }
+
 
     async _getPlayerBySocketId(socket_id) {
         var _, player = await this.collection.findOne({socket_id: socket_id})

@@ -41,6 +41,7 @@ class Game {
         var player = new Player(this.database, socketId, this.room)
         return player.register(playerName)
     }
+
     async joinRoom(name, room, old_room, old_socket_id, socket_id, rejoin) {
         console.log("Joining to room", room, "player", name, "Socket", socket_id, "Session Socket:", old_socket_id)
         if ((!name && !rejoin) || !socket_id) {
@@ -161,48 +162,19 @@ class Game {
 
         }
         await Promise.allSettled(promises)
-        return currentPlayer
+        return new Player(this.database, currentPlayer.socket_id, this.room)
     }
 
-    async chosenCard(roomCode, card, socket_id) {
-        var room = await this.getRoom(roomCode)
-        if (!room) {
-            return false
-        }
+    async chosenCard(player, card) {
+      if (! await this.room.canChooseACard(player)) {
+        return false
+      }
+      if (! await player.chooseCard(card)) {
+        return false
+      }
+      await this.room.setChosenCard(card)
 
-        var player = await this.getPlayerBySocketId(socket_id)
-
-        if (!player || room.current_player.toString() != player._id.toString()) {
-            return false
-        }
-
-        if (! await this._canChoose(room, player._id)) {
-            return false
-        }
-
-        var index = player.cards.indexOf(card)
-        if (index == -1) {
-            return false
-        }
-
-        player.cards.splice(index, 1)
-
-        await this.updateRoom(roomCode, {chosen_cards: [{card: card, player: player._id}], correct_card: card, status: STATUS_CHOOSE_SIMILAR_CARD})
-        await this.updatePlayer(player._id, {cards: player.cards, game_status: USER_GAME_STATUS_READY})
-        return true
-
-    }
-
-    async _canChoose(room, player_id) {
-        var can = true
-        for (var i in room.chosen_cards) {
-            var choose = room.chosen_cards[i]
-            if (choose.player.toString() == player_id.toString()) {
-                can = false
-                break
-            }
-        }
-        return can
+      return true
     }
 
     async _canGuess(room, player_id, card) {
@@ -221,70 +193,38 @@ class Game {
         return true
     }
 
-    async similarCardChosen(roomCode, card, socket_id) {
-        var room = await this.getRoom(roomCode)
-        if (!room) {
-            return false
-        }
+    async similarCardChosen(player, card) {
+      if (! await this.room.canChooseACard(player)) {
+        return false
+      }
 
-        if (room.status != STATUS_CHOOSE_SIMILAR_CARD) {
-            return false
-        }
+      if (! await player.chooseCard(card)) {
+        return false
+      }
+      await this.room.addChosenCard(player, card)
 
-        var player = await this.getPlayerBySocketId(socket_id)
-
-        if (!player) {
-            return false
-        }
-
-        if (! await this._canChoose(room, player._id)) {
-            return false
-        }
-
-        var index = player.cards.indexOf(card)
-        if (index == -1) {
-            return false
-        }
-
-        player.cards.splice(index, 1)
-
-        room.chosen_cards.push({card: card, player: player._id})
-        await this.updateRoom(roomCode, {chosen_cards: room.chosen_cards})
-        await this.updatePlayer(player._id, {cards: player.cards, game_status: USER_GAME_STATUS_READY})
-        return true
+      return true
     }
 
-    async areAllPlayersReady(room) {
-        if (! await this.roomExists(room)) {
+    async endChooseAndGetCards() {
+        let room = await this.room.getData()
+
+        if (room.status != settings.room.status.CHOOSE_SIMILAR_CARD) {
             return false
         }
 
-        var total_ready = await this.database.collection("players").countDocuments({room: room, game_status: USER_GAME_STATUS_READY})
-        var total = await this.database.collection("players").countDocuments({room: room})
-        return (total-total_ready) === 0
-
-    }
-    async endChooseAndGetCards(roomCode) {
-        var room = await this.getRoom(roomCode)
-        if (!room) {
-            return false
-        }
-
-        if (room.status != STATUS_CHOOSE_SIMILAR_CARD) {
-            return false
-        }
-
-        if (!await this.areAllPlayersReady(roomCode)) {
+        if (!await this.room.areAllPlayersReady()) {
             return false
         }
 
         var promises = []
-        promises.push(this.updateRoom(roomCode, {status: STATUS_FIND_THE_CHOSEN_CARD}))
-        var players = await this.getPlayersList(roomCode, true)
+        promises.push(this.room.setStatus(settings.room.status.FIND_THE_CHOSEN_CARD))
+        var players = await this.room.getPlayers()
         for (var i in players) {
             var player = players[i]
             if (player._id.toString() != room.current_player.toString()) {
-                promises.push(this.updatePlayer(player._id, {game_status: USER_GAME_STATUS_WAITING}))
+                let playerObj = new Player(this.database, player.socket_id, this.room)
+                promises.push(playerObj.setGameStatus(settings.player.game_status.WAITING))
             }
         }
         await Promise.allSettled(promises)
