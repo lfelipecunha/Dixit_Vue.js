@@ -224,75 +224,65 @@ class Game {
       return true
     }
 
-    async endTurn(roomCode) {
-        var room = await this.getRoom(roomCode)
-        if (!room) {
-            return false
-        }
+    async endTurn() {
+      if (! await this.room.canEndTurn()) {
+        return false
+      }
 
-        if (room.status != STATUS_FIND_THE_CHOSEN_CARD) {
-            return false
+      let players = await this.room.getPlayers()
+      let room = await this.room.getData()
+      let wrong = []
+      for (let i in room.guessed_cards) {
+        let guess = room.guessed_cards[i]
+        if (guess.card != room.correct_card) {
+          wrong.push(guess)
         }
+      }
 
-        if (!await this.areAllPlayersReady(roomCode)) {
-            return false
-        }
-        var players = await this.getPlayersList(roomCode, true)
-        var wrong = []
-        for (var i in room.guessed_cards) {
-            var guess = room.guessed_cards[i]
-            if (guess.card != room.correct_card) {
-                wrong.push(guess)
-            }
-        }
-
-
-        var promises = []
-        for (var p in players) {
-            var player = players[p]
-            var points = player.points
-            if (player._id.toString() == room.current_player.toString()) {
-                if (wrong.length > 0 && wrong.length < players.length-1) { // someone got it right but not everybody
-                    points+=3
-                }
+      let promises = []
+      for (let p in players) {
+        let player = players[p]
+        let points = player.points
+        if (player._id.toString() == room.current_player.toString()) {
+          if (wrong.length > 0 && wrong.length < players.length-1) { // someone got it right but not everybody
+            points+=3
+          }
+        } else {
+          points += 2
+          let gotItRight = true
+          for (let w in wrong) {
+            let guess = wrong[w]
+            if (guess.player.toString() == player._id.toString()) { // this player got it wrong
+              gotItRight = false
+              if (wrong.length < players.length-1) { // someone got it right
+                points -=2
+              }
             } else {
-                points += 2
-                var gotItRight = true
-                for (var w in wrong) {
-                    var guess = wrong[w]
-                    if (guess.player.toString() == player._id.toString()) { // this player got it wrong
-                        gotItRight = false
-                        if (wrong.length < players.length-1) { // someone got it right
-                            points -=2
-                        }
-                    } else {
-
-                        for (var cc in room.chosen_cards) {
-                            var choose = room.chosen_cards[cc]
-                            if (choose.card == guess.card && choose.player.toString() == player._id.toString()) { // someone choose this player card
-                                points+=1
-                            }
-                        }
-                    }
+              for (let cc in room.chosen_cards) {
+                let choose = room.chosen_cards[cc]
+                if (choose.card == guess.card && choose.player.toString() == player._id.toString()) { // someone choose this player card
+                  points+=1
                 }
-                if (gotItRight && wrong.length > 0 && wrong.length < players.length-1) { // this player got it right and at least one, but not all, player got it wrong
-                    points += 1 // just one more 'cause it was initialized with 2 points
-                }
+              }
+            }
+          }
 
-            }
-            var playerData = {game_status: USER_GAME_STATUS_WAITING}
-            if (points > player.points) {
-                playerData.points = points
-            }
-            promises.push(this.updatePlayer(player._id, playerData))
+          if (gotItRight && wrong.length > 0 && wrong.length < players.length-1) { // this player got it right and at least one, but not all, player got it wrong
+            points += 1 // just one more 'cause it was initialized with 2 points
+          }
         }
+        if (points < player.points) {
+          points = player.points
+        }
+        let playerObj = new Player(this.database, player.socket_id, this.room)
+        promises.push(playerObj.endTurn(points))
+      }
 
-        promises.push(this.updateRoom(roomCode, {chosen_cards: [], guessed_cards:[], correct_card: null, status: STATUS_STARTED}))
+      promises.push(this.room.endTurn())
 
-        await Promise.allSettled(promises)
-        await this.distributeCards(roomCode, 1)
-        return true
-
+      await Promise.allSettled(promises)
+      await this.distributeCards(1)
+      return true
     }
 
     shuffle(array) {

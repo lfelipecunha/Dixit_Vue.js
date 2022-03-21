@@ -616,159 +616,165 @@ test("Guess Cards", async () => {
     expect(p1Data.game_status).toEqual(settings.player.game_status.READY)
 })
 
-test.skip("Guessing before the time", async () => {
+test("Guessing before the time", async () => {
     var game = new Game(database)
-    var roomCode = await game.createRoom()
-    await game.joinRoom("Player 1", roomCode, null, null, "socket1", false)
-    await game.joinRoom("Player 2", roomCode, null, null, "socket2", false)
-    await game.joinRoom("Player 3", roomCode, null, null, "socket3", false)
+    await game.init()
+    await game.join("Player 1", "socket1")
+    await game.join("Player 2", "socket2")
+    await game.join("Player 3", "socket3")
 
-    await game.startGame(roomCode)
+    await game.start()
 
-    var currentPlayer = await game.nextPlayer(roomCode)
+    var currentPlayer = await game.nextPlayer()
+    var data = await currentPlayer.getData()
+    var players = await game.room.getPlayers()
 
-    expect(await game.guessedCard(roomCode, currentPlayer.cards[0], "socket1")).toBeFalsy()
+    let p1 = new Player(database, players[1].socket_id, game.room)
 
+    expect(await game.guessedCard(p1, data.cards[0])).toBeFalsy()
 
-    await game.chosenCard(roomCode, currentPlayer.cards[0], currentPlayer.socket_id)
-    var players = await game.getPlayersList(roomCode, true)
+    await game.chosenCard(currentPlayer, data.cards[0])
 
-    expect(await game.guessedCard(roomCode, currentPlayer.cards[0], players[1].socket_id)).toBeFalsy()
+    expect(await game.guessedCard(p1, data.cards[0])).toBeFalsy()
 
     for(var p in players) {
         var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.similarCardChosen(roomCode, player.cards[0], player.socket_id)
+        if (player._id.toString() != data._id.toString()) {
+            var playerObj = new Player(database, player.socket_id, game.room)
+            await game.similarCardChosen(playerObj, player.cards[0])
         }
     }
 
-    expect(await game.guessedCard(roomCode, currentPlayer.cards[0], players[1].socket_id)).toBeFalsy()
-
-    await game.endChooseAndGetCards(roomCode)
-
-    expect(await game.guessedCard(roomCode, currentPlayer.cards[0], players[1].socket_id)).toBeTruthy()
-
-    var room = await game.getRoom(roomCode)
-    expect(room.guessed_cards).toBeInstanceOf(Array)
-    expect(room.guessed_cards.length).toBe(1)
-    expect(room.guessed_cards[0].card).toBe(currentPlayer.cards[0])
-    expect(room.guessed_cards[0].player).toEqual(players[1]._id)
-
-    var player = await game.getPlayerBySocketId(players[1].socket_id)
-    expect(player.game_status).toEqual("ready")
-
+    expect(await game.guessedCard(p1, data.cards[0])).toBeFalsy()
 })
 
-test.skip("Current Player guessing a card", async () => {
+test("Current Player guessing a card", async () => {
     var game = new Game(database)
-    var roomCode = await game.createRoom()
-    await game.joinRoom("Player 1", roomCode, null, null, "socket1", false)
-    await game.joinRoom("Player 2", roomCode, null, null, "socket2", false)
-    await game.joinRoom("Player 3", roomCode, null, null, "socket3", false)
+    await game.init()
+    await game.join("Player 1", "socket1")
+    await game.join("Player 2", "socket2")
+    await game.join("Player 3", "socket3")
 
-    await game.startGame(roomCode)
+    await game.start()
 
-    var currentPlayer = await game.nextPlayer(roomCode)
-    await game.chosenCard(roomCode, currentPlayer.cards[0], currentPlayer.socket_id)
-    var players = await game.getPlayersList(roomCode, true)
+    var currentPlayer = await game.nextPlayer()
+    var data = await currentPlayer.getData()
+    await game.chosenCard(currentPlayer, data.cards[0])
+
+    var players = await game.room.getPlayers()
+
     for(var p in players) {
         var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.similarCardChosen(roomCode, player.cards[0], player.socket_id)
+        if (player._id.toString() != data._id.toString()) {
+            var playerObj = new Player(database, player.socket_id, game.room)
+            await game.similarCardChosen(playerObj, player.cards[0])
         }
     }
 
-    await game.endChooseAndGetCards(roomCode)
+    await game.endChooseAndGetCards()
 
-    expect(await game.guessedCard(roomCode, currentPlayer.cards[0], currentPlayer.socket_id)).toBeFalsy()
+    expect(await game.guessedCard(currentPlayer, data.cards[0])).toBeFalsy()
 })
 
-test.skip("Guessin my own card", async () => {
+test("Guessin my own card", async () => {
     var game = new Game(database)
-    var roomCode = await game.createRoom()
-    await game.joinRoom("Player 1", roomCode, null, null, "socket1", false)
-    await game.joinRoom("Player 2", roomCode, null, null, "socket2", false)
-    await game.joinRoom("Player 3", roomCode, null, null, "socket3", false)
+    await game.init()
+    await game.join("Player 1", "socket1")
+    await game.join("Player 2", "socket2")
+    await game.join("Player 3", "socket3")
 
-    await game.startGame(roomCode)
+    await game.start()
 
-    var currentPlayer = await game.nextPlayer(roomCode)
-    await game.chosenCard(roomCode, currentPlayer.cards[0], currentPlayer.socket_id)
-    var players = await game.getPlayersList(roomCode, true)
+    var currentPlayer = await game.nextPlayer()
+    var data = await currentPlayer.getData()
+    await game.chosenCard(currentPlayer, data.cards[0])
+
+    var players = await game.room.getPlayers()
+
     for(var p in players) {
         var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.similarCardChosen(roomCode, player.cards[0], player.socket_id)
+        if (player._id.toString() != data._id.toString()) {
+            var playerObj = new Player(database, player.socket_id, game.room)
+            await game.similarCardChosen(playerObj, player.cards[0])
         }
     }
 
-    await game.areAllPlayersReady(roomCode)
-    await game.endChooseAndGetCards(roomCode)
+    await game.endChooseAndGetCards()
 
-    expect(await game.guessedCard(roomCode, players[1].cards[0], players[1].socket_id)).toBeFalsy()
+    let p1 = new Player(database, players[1].socket_id, game.room)
+
+    expect(await game.guessedCard(p1, players[1].cards[0])).toBeFalsy()
 })
 
-test.skip("Guessin twice", async () => {
+test("Guessin twice", async () => {
     var game = new Game(database)
-    var roomCode = await game.createRoom()
-    await game.joinRoom("Player 1", roomCode, null, null, "socket1", false)
-    await game.joinRoom("Player 2", roomCode, null, null, "socket2", false)
-    await game.joinRoom("Player 3", roomCode, null, null, "socket3", false)
+    await game.init()
+    await game.join("Player 1", "socket1")
+    await game.join("Player 2", "socket2")
+    await game.join("Player 3", "socket3")
 
-    await game.startGame(roomCode)
+    await game.start()
 
-    var currentPlayer = await game.nextPlayer(roomCode)
-    await game.chosenCard(roomCode, currentPlayer.cards[0], currentPlayer.socket_id)
-    var players = await game.getPlayersList(roomCode, true)
+    var currentPlayer = await game.nextPlayer()
+    var data = await currentPlayer.getData()
+    await game.chosenCard(currentPlayer, data.cards[0])
+
+    var players = await game.room.getPlayers()
+
     for(var p in players) {
         var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.similarCardChosen(roomCode, player.cards[0], player.socket_id)
+        if (player._id.toString() != data._id.toString()) {
+            var playerObj = new Player(database, player.socket_id, game.room)
+            await game.similarCardChosen(playerObj, player.cards[0])
         }
     }
 
-    await game.areAllPlayersReady(roomCode)
-    await game.endChooseAndGetCards(roomCode)
+    await game.endChooseAndGetCards()
 
-    expect(await game.guessedCard(roomCode, currentPlayer.cards[0], players[1].socket_id)).toBeTruthy()
-    expect(await game.guessedCard(roomCode, currentPlayer.cards[0], players[1].socket_id)).toBeFalsy()
+    let p1 = new Player(database, players[1].socket_id, game.room)
+    expect(await game.guessedCard(p1, data.cards[0])).toBeTruthy()
+    expect(await game.guessedCard(p1, data.cards[0])).toBeFalsy()
 })
 
 
-test.skip("End Turn", async () => {
+test("End Turn", async () => {
     var game = new Game(database)
-    var roomCode = await game.createRoom()
-    await game.joinRoom("Player 1", roomCode, null, null, "socket1", false)
-    await game.joinRoom("Player 2", roomCode, null, null, "socket2", false)
-    await game.joinRoom("Player 3", roomCode, null, null, "socket3", false)
+    await game.init()
+    await game.join("Player 1", "socket1")
+    await game.join("Player 2", "socket2")
+    await game.join("Player 3", "socket3")
 
-    await game.startGame(roomCode)
+    await game.start()
 
-    var currentPlayer = await game.nextPlayer(roomCode)
-    await game.chosenCard(roomCode, currentPlayer.cards[0], currentPlayer.socket_id)
-    var players = await game.getPlayersList(roomCode, true)
-    for(var p in players) {
-        var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.similarCardChosen(roomCode, player.cards[0], player.socket_id)
-        }
-    }
+    var currentPlayer = await game.nextPlayer()
+    var data = await currentPlayer.getData()
+    await game.chosenCard(currentPlayer, data.cards[0])
 
-    expect(await game.endChooseAndGetCards(roomCode)).not.toBeFalsy()
+    var players = await game.room.getPlayers()
+    var playersObj = {}
 
     for(var p in players) {
         var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.guessedCard(roomCode, currentPlayer.cards[0], player.socket_id)
+        if (player._id.toString() != data._id.toString()) {
+            var playerObj = new Player(database, player.socket_id, game.room)
+            playersObj[p] = playerObj
+            await game.similarCardChosen(playerObj, player.cards[0])
         }
     }
 
-    expect(await game.areAllPlayersReady(roomCode)).toBeTruthy()
+    await game.endChooseAndGetCards()
 
-    expect(await game.endTurn(roomCode)).toBeTruthy()
+    for(var p in players) {
+        var player = players[p]
+        if (player._id.toString() != data._id.toString()) {
+            await game.guessedCard(playersObj[p], data.cards[0])
+        }
+    }
 
-    var room = await game.getRoom(roomCode)
-    expect(room.status).toBe(1)
+    expect(await game.endTurn()).toBeTruthy()
+
+    var room = await game.room.getData()
+    expect(room.status).toBe(settings.room.status.STARTED)
     expect(room.chosen_cards).toBeInstanceOf(Array)
     expect(room.chosen_cards.length).toBe(0)
 
@@ -777,20 +783,20 @@ test.skip("End Turn", async () => {
 
     expect(room.correct_card).toBeNull()
 
-    players = await game.getPlayersList(roomCode)
+    players = await game.room.getPlayers()
     for(var p in players) {
         var player = players[p]
         var points = 2
-        if (player._id.toString() == currentPlayer._id.toString()) {
+        if (player._id.toString() == data._id.toString()) {
             points = 0
         }
         expect(player.points).toBe(points)
-        expect(player.game_status).toEqual("waiting")
-        expect(player.cards.length).toBe(6)
+        expect(player.game_status).toEqual(settings.player.game_status.WAITING)
+        expect(player.cards.length).toBe(settings.game.HAND_SIZE)
     }
 })
 
-test.concurrent.skip.each([
+test.concurrent.each([
     { player_guesses: [-1, -1, -1, -1], player_points: [0, 2, 2, 2, 2]}, // everybody guess it right with 4 players
     { player_guesses: [1, 0, 0], player_points: [0, 4, 3, 2]}, // nobody guess it right
     { player_guesses: [-1, 0, 0], player_points: [3, 5, 0, 0]}, // one player got it righ and other players choose his card
@@ -798,131 +804,135 @@ test.concurrent.skip.each([
     { player_guesses: [-1, -1, 1], player_points: [3, 3, 4, 0]}, // two players got it right
 
 ])("End turn with guesses $player_guesses and points $player_points", async ({player_guesses, player_points}) => {
-    var game = new Game(database)
-    var roomCode = await game.createRoom()
-    for (var i=0; i < player_points.length; i++) {
-        await game.joinRoom("Player "+i, roomCode, null, null, "socket"+i, false)
+    let game = new Game(database)
+    await game.init()
+    for (let i=0; i < player_points.length; i++) {
+      await game.join("Player "+i, "socket"+i)
     }
 
-    await game.startGame(roomCode)
+    await game.start()
 
-    var currentPlayer = await game.nextPlayer(roomCode)
-    await game.chosenCard(roomCode, currentPlayer.cards[0], currentPlayer.socket_id)
+    let currentPlayer = await game.nextPlayer()
+    let currentPlayerData = await currentPlayer.getData()
+    await game.chosenCard(currentPlayer, currentPlayerData.cards[0])
 
-    var players = await game.getPlayersList(roomCode, true)
+    let players = await game.room.getPlayers()
 
-    var indexToRemove = null
+    let indexToRemove = null
     for(var p in players) {
-        var player = players[p]
-        if (player._id.toString() == currentPlayer._id.toString()) {
-            indexToRemove = p
-        } else {
-            expect(await game.similarCardChosen(roomCode, player.cards[0], player.socket_id)).toBeTruthy()
-        }
+      let player = players[p]
+      if (player._id.toString() == currentPlayerData._id.toString()) {
+        indexToRemove = p
+      } else {
+        let pObj = new Player(database, player.socket_id, game.room)
+        expect(await game.similarCardChosen(pObj, player.cards[0])).toBeTruthy()
+      }
     }
     players.splice(indexToRemove, 1)
 
-    expect(await game.endChooseAndGetCards(roomCode)).not.toBeFalsy()
+    expect(await game.endChooseAndGetCards()).not.toBeFalsy()
 
-    for (var i in players) {
-        var guess = currentPlayer.cards[0]
-        if (player_guesses[i] != -1) { // this player guessed the correct card
-            guess = players[player_guesses[i]].cards[0]
-
-        }
-        expect(await game.guessedCard(roomCode, guess, players[i].socket_id)).toBeTruthy()
+    for (let i in players) {
+      let guess = currentPlayerData.cards[0]
+      if (player_guesses[i] != -1) { // this player guessed the correct card
+        guess = players[player_guesses[i]].cards[0]
+      }
+      let pObj = new Player(database, players[i].socket_id, game.room)
+      expect(await game.guessedCard(pObj, guess)).toBeTruthy()
     }
 
+    expect(await game.endTurn()).toBeTruthy()
 
-    expect(await game.endTurn(roomCode)).toBeTruthy()
-
-    var updatedPlayers = await game.getPlayersList(roomCode, true)
+    let updatedPlayers = await game.room.getPlayers()
 
     updatedPlayers.forEach(player => {
-        var points = 0
-        if (player._id.toString() == currentPlayer._id.toString()) {
-            points = player_points[0]
-        } else {
-            for (var i=0; i < players.length; i++) {
-                if (player._id.toString() == players[i]._id.toString()) {
-                    points = player_points[i+1]
-                    break;
-                }
-            }
+      let points = 0
+      if (player._id.toString() == currentPlayerData._id.toString()) {
+        points = player_points[0]
+      } else {
+        for (let i=0; i < players.length; i++) {
+          if (player._id.toString() == players[i]._id.toString()) {
+            points = player_points[i+1]
+            break;
+          }
         }
+      }
 
-        expect(player.points).toBe(points)
+      expect(player.points).toBe(points)
     })
 })
 
-test.skip("End Turn before the time", async () => {
-    var game = new Game(database)
-    var roomCode = await game.createRoom()
-    await game.joinRoom("Player 1", roomCode, null, null, "socket1", false)
-    await game.joinRoom("Player 2", roomCode, null, null, "socket2", false)
-    await game.joinRoom("Player 3", roomCode, null, null, "socket3", false)
+test("End Turn before the time", async () => {
+  let game = new Game(database)
+  await game.init()
+  await game.join("Player 1", "socket1")
+  await game.join("Player 2", "socket2")
+  await game.join("Player 3", "socket3")
 
-    await game.startGame(roomCode)
+  await game.start()
 
-    expect(await game.endTurn(roomCode)).toBeFalsy()
+  expect(await game.endTurn()).toBeFalsy()
 
-    var currentPlayer = await game.nextPlayer(roomCode)
-    await game.chosenCard(roomCode, currentPlayer.cards[0], currentPlayer.socket_id)
-    expect(await game.endTurn(roomCode)).toBeFalsy()
+  let currentPlayer = await game.nextPlayer()
+  let currentPlayerData = await currentPlayer.getData()
+  await game.chosenCard(currentPlayer, currentPlayerData.cards[0])
+  expect(await game.endTurn()).toBeFalsy()
 
-    var players = await game.getPlayersList(roomCode, true)
-    for(var p in players) {
-        var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.similarCardChosen(roomCode, player.cards[0], player.socket_id)
-        }
+  let players = await game.room.getPlayers()
+  for(let p in players) {
+    let player = players[p]
+    if (player._id.toString() != currentPlayerData._id.toString()) {
+      let pObj = new Player(database, player.socket_id, game.room)
+      await game.similarCardChosen(pObj, player.cards[0])
     }
-    await game.endChooseAndGetCards(roomCode)
-    expect(await game.endTurn(roomCode)).toBeFalsy()
+  }
+  await game.endChooseAndGetCards()
 
-    for(var p in players) {
-        var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.guessedCard(roomCode, currentPlayer.cards[0], player.socket_id)
-        }
+  for(let p in players) {
+    let player = players[p]
+    if (player._id.toString() != currentPlayerData._id.toString()) {
+      expect(await game.endTurn()).toBeFalsy()
+      let pObj = new Player(database, player.socket_id, game.room)
+      await game.guessedCard(pObj, currentPlayerData.cards[0])
     }
+  }
 
-    expect(await game.endTurn(roomCode)).toBeTruthy()
+  expect(await game.endTurn()).toBeTruthy()
 })
 
-test.skip("End Turn twice", async () => {
-    var game = new Game(database)
-    var roomCode = await game.createRoom()
-    await game.joinRoom("Player 1", roomCode, null, null, "socket1", false)
-    await game.joinRoom("Player 2", roomCode, null, null, "socket2", false)
-    await game.joinRoom("Player 3", roomCode, null, null, "socket3", false)
+test("End Turn twice", async () => {
+  let game = new Game(database)
+  await game.init()
+  await game.join("Player 1", "socket1")
+  await game.join("Player 2", "socket2")
+  await game.join("Player 3", "socket3")
 
-    await game.startGame(roomCode)
+  await game.start()
 
+  let currentPlayer = await game.nextPlayer()
+  let currentPlayerData = await currentPlayer.getData()
+  await game.chosenCard(currentPlayer, currentPlayerData.cards[0])
 
-    var currentPlayer = await game.nextPlayer(roomCode)
-    await game.chosenCard(roomCode, currentPlayer.cards[0], currentPlayer.socket_id)
-
-    var players = await game.getPlayersList(roomCode, true)
-    for(var p in players) {
-        var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.similarCardChosen(roomCode, player.cards[0], player.socket_id)
-        }
+  let players = await game.room.getPlayers()
+  for(let p in players) {
+    let player = players[p]
+    if (player._id.toString() != currentPlayerData._id.toString()) {
+      let pObj = new Player(database, player.socket_id, game.room)
+      await game.similarCardChosen(pObj, player.cards[0])
     }
+  }
+  await game.endChooseAndGetCards()
 
-    await game.endChooseAndGetCards(roomCode)
-
-    for(var p in players) {
-        var player = players[p]
-        if (player._id.toString() != currentPlayer._id.toString()) {
-            await game.guessedCard(roomCode, currentPlayer.cards[0], player.socket_id)
-        }
+  for(let p in players) {
+    let player = players[p]
+    if (player._id.toString() != currentPlayerData._id.toString()) {
+      let pObj = new Player(database, player.socket_id, game.room)
+      await game.guessedCard(pObj, currentPlayerData.cards[0])
     }
+  }
 
-
-    expect(await game.endTurn(roomCode)).toBeTruthy()
-    expect(await game.endTurn(roomCode)).toBeFalsy()
+  expect(await game.endTurn()).toBeTruthy()
+  expect(await game.endTurn()).toBeFalsy()
 })
 
 test.skip("Deactivate Player", async () => {

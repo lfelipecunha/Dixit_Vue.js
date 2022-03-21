@@ -154,6 +154,19 @@ class Room {
       return this._update({guessed_cards: data.guessed_cards})
     }
 
+    async canEndTurn() {
+      let data = await this.getData()
+      if (data.status != settings.room.status.FIND_THE_CHOSEN_CARD || ! await this.areAllPlayersReady()) {
+        return false
+      }
+
+      return true
+    }
+
+    async endTurn() {
+      return this._update({chosen_cards: [], guessed_cards:[], correct_card: null, status: settings.room.status.STARTED})
+    }
+
     // PRIVATE METHODS
     async _update(room_data) {
         var result = await this.collection.updateOne({code: this.code}, {$set: room_data})

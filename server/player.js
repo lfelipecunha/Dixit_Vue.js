@@ -59,6 +59,10 @@ class Player {
       return true
     }
 
+    async endTurn(points) {
+      return this._update({points: points, game_status: settings.player.game_status.WAITING})
+    }
+
     // PRIVATE METHODS
     async _update(data) {
         var result = await this.collection.updateOne({socket_id: this.socket_id}, {$set: data})
