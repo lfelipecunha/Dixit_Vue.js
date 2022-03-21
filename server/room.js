@@ -110,10 +110,6 @@ class Room {
         chosen_cards: data.chosen_cards
       }
 
-     /* if (data.chosen_cards.length == (await this.getPlayers()).length) {
-        updatedData.status = settings.room.status.FIND_SIMILAR_CARD
-      }*/
-
       return this._update(updatedData)
     }
 
@@ -121,6 +117,41 @@ class Room {
       var total_ready = await this.playersCollection.countDocuments({room: this.code, game_status: settings.player.game_status.READY})
       var total = await this.playersCollection.countDocuments({room: this.code})
       return (total-total_ready) === 0
+    }
+
+    async canGuess(player, card) {
+      const room = await this.getData()
+      const playerData = await player.getData()
+
+      if (room.status != settings.room.status.FIND_THE_CHOSEN_CARD) {
+        return false
+      }
+
+      if (room.current_player.toString() == playerData._id.toString()) {
+        return false
+      }
+
+      for (var i in room.guessed_cards) {
+        var guess = room.guessed_cards[i]
+        if (guess.player.toString() == playerData._id.toString()) {
+          return false
+        }
+      }
+
+      for (var i in room.chosen_cards) {
+        var choose = room.chosen_cards[i]
+        if (choose.card == card && choose.player.toString() == playerData._id.toString()) {
+          return false
+        }
+      }
+
+      return true
+    }
+
+    async addGuessedCard(player, card) {
+      let data = await this.getData()
+      data.guessed_cards.push({player: (await player.getData())._id, card: card})
+      return this._update({guessed_cards: data.guessed_cards})
     }
 
     // PRIVATE METHODS

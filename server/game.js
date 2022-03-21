@@ -177,22 +177,6 @@ class Game {
       return true
     }
 
-    async _canGuess(room, player_id, card) {
-        for (var i in room.guessed_cards) {
-            var guess = room.guessed_cards[i]
-            if (guess.player.toString() == player_id.toString()) {
-                return false
-            }
-        }
-        for (var i in room.chosen_cards) {
-            var choose = room.chosen_cards[i]
-            if (choose.card == card && choose.player.toString() == player_id.toString()) {
-                return false
-            }
-        }
-        return true
-    }
-
     async similarCardChosen(player, card) {
       if (! await this.room.canChooseACard(player)) {
         return false
@@ -231,29 +215,13 @@ class Game {
         return this.shuffle(room.chosen_cards.map((value) => {return value.card}))
     }
 
-    async guessedCard(roomCode, card, socket_id) {
-        var room = await this.getRoom(roomCode)
-        if (!room) {
-            return false
-        }
-        if (room.status != STATUS_FIND_THE_CHOSEN_CARD) {
-            return false
-        }
-
-        var player = await this.getPlayerBySocketId(socket_id)
-
-        if (!player || room.current_player.toString() == player._id.toString()) {
-            return false
-        }
-
-        if (!await this._canGuess(room, player._id, card)) {
-            return false
-        }
-
-        room.guessed_cards.push({card: card, player: player._id})
-        await this.updateRoom(roomCode, {guessed_cards: room.guessed_cards})
-        await this.updatePlayer(player._id, {cards: player.cards, game_status: USER_GAME_STATUS_READY})
-        return true
+    async guessedCard(player, card) {
+      if (! await this.room.canGuess(player, card)) {
+        return false
+      }
+      await this.room.addGuessedCard(player, card)
+      await player.setGameStatus(settings.player.game_status.READY)
+      return true
     }
 
     async endTurn(roomCode) {
