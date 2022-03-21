@@ -42,7 +42,7 @@ class Game {
         return player.register(playerName)
     }
 
-    async joinRoom(name, room, old_room, old_socket_id, socket_id, rejoin) {
+    /*async joinRoom(name, room, old_room, old_socket_id, socket_id, rejoin) {
         console.log("Joining to room", room, "player", name, "Socket", socket_id, "Session Socket:", old_socket_id)
         if ((!name && !rejoin) || !socket_id) {
             return false
@@ -81,20 +81,7 @@ class Game {
 
         console.error("An error has occured")
         return false
-    }
-
-    async getPlayersList(room, full_data) {
-        var options = {sort: {_id: 1}}
-        if (!full_data) {
-            //options.projection = {_id:0, name: 1, room: 1, status: 1, game_status: 1, cards: 0, points: 1}
-        }
-        var players = this.database.collection("players").find({room: room}, options)
-        return players.toArray()
-    }
-
-    async getPlayerBySocketId(socket_id) {
-        console.log(socket_id);
-    }
+    }*/
 
     async start() {
         if (!await this.room.startGame()) {
