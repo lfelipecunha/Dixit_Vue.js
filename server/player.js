@@ -1,7 +1,6 @@
 var settings = require('./settings.js')
 
 const initialData = {
-status: settings.player.status.ACTIVE,
   game_status: settings.player.game_status.WAITING,
   cards: [],
   points: 0
@@ -29,6 +28,7 @@ class Player {
 
     var data = {
       ... initialData,
+      status: settings.player.status.ACTIVE,
       socket_id: this.socket_id,
       name: name,
       room: this.room.getCode(),
@@ -62,6 +62,10 @@ class Player {
 
   async endTurn(points) {
     return this._update({points: points, game_status: settings.player.game_status.WAITING})
+  }
+
+  async reset() {
+    return this._update(initialData)
   }
 
   // PRIVATE METHODS

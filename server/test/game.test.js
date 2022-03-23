@@ -1045,7 +1045,7 @@ test("End Game", async () => {
   for (let i in playersResult) {
     let curP = playersResult[i]
       if (!!aux) {
-        expect(aux.points).toGreatherThanOrEqual(curP.points)
+        expect(aux.points).toBeGreaterThanOrEqual(curP.points)
       }
     aux = curP
   }
@@ -1062,9 +1062,10 @@ test("End Game", async () => {
 
   players = await game.room.getPlayers()
   for(var p in players) {
+    let player = players[p]
     expect(player.points).toBe(0)
-    expect(player.game_status).toEqual(settings.player.game_status.WAITING)
     expect(player.cards.length).toBe(0)
+    expect(player.game_status).toEqual(settings.player.game_status.WAITING)
   }
 })
 

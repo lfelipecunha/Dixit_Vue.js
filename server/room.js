@@ -1,5 +1,6 @@
 const random_human_readable = require( "./random_human_readable")
-var settings = require('./settings.js')
+const settings = require('./settings.js')
+const Player = require('./player.js')
 
 const initialRoom = {
 status: settings.room.status.CREATED,
@@ -179,11 +180,11 @@ class Room {
     var players = await this.getPlayers()
     var promisses = []
     for (let i in players) {
-      let p = new Player(this.database, players[p].socket_id, this)
-        promisses.push(p.reset())
+      let p = new Player(this.database, players[i].socket_id, this)
+      promisses.push(p.reset())
     }
     promisses.push(this._update(initialRoom))
-    return Promise.allSettled()
+    return Promise.allSettled(promisses)
   }
 
   // PRIVATE METHODS
