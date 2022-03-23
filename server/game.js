@@ -39,7 +39,11 @@ class Game {
             return false
         }
         var player = new Player(this.database, socketId, this.room)
-        return player.register(playerName)
+        if (! await player.register(playerName)) {
+          return false
+        }
+
+        return player
     }
 
     /*async joinRoom(name, room, old_room, old_socket_id, socket_id, rejoin) {
@@ -262,6 +266,7 @@ class Game {
           points = player.points
         }
         let playerObj = new Player(this.database, player.socket_id, this.room)
+        console.log('Player', player.name, 'points', points)
         promises.push(playerObj.endTurn(points))
       }
 

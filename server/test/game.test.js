@@ -862,6 +862,73 @@ test.concurrent.each([
     })
 })
 
+test("Multiple turns", async () => {
+  const configuration = {
+    'players': 4,
+    'turns': [
+      {'guesses': [null,    2,    1,    1], 'points': [ 0,  4, 3, 2] }, // player 1
+      {'guesses': [  -1, null,    0,    0], 'points': [ 5,  7, 3, 2] }, // player 2
+      {'guesses': [  -1,    3, null,    1], 'points': [ 8,  8, 6, 3] }, // player 3
+      {'guesses': [  -1,   -1,    1, null], 'points': [11, 12, 6, 6] }  // player 4
+    ]
+  }
+  let game = new Game(database)
+  await game.init()
+
+  for (let i=0; i < configuration.players; i++) {
+    await game.join("Player "+i, "socket"+i)
+  }
+
+  await game.start()
+  for (let turn=0; turn < configuration.turns.length; turn++) {
+    let player_guesses = configuration.turns[turn].guesses
+    let player_points = configuration.turns[turn].points
+
+    let currentPlayer = await game.nextPlayer()
+    let currentPlayerData = await currentPlayer.getData()
+    await game.chosenCard(currentPlayer, currentPlayerData.cards[0])
+
+    let players = await game.room.getPlayers()
+
+    for(var p in players) {
+      let player = players[p]
+      if (player._id.toString() != currentPlayerData._id.toString()) {
+        let pObj = new Player(database, player.socket_id, game.room)
+        await game.similarCardChosen(pObj, player.cards[0])
+      }
+    }
+
+    await game.endChooseAndGetCards()
+
+    for (let i in players) {
+      if (players[i]._id.toString() != currentPlayerData._id.toString()) {
+        let guess = currentPlayerData.cards[0]
+        if (player_guesses[i] != -1) { // this player guessed the wrong card
+          guess = players[player_guesses[i]].cards[0]
+        }
+        let pObj = new Player(database, players[i].socket_id, game.room)
+        expect(await game.guessedCard(pObj, guess)).toBeTruthy()
+      }
+    }
+
+    expect(await game.endTurn()).toBeTruthy()
+
+    let updatedPlayers = await game.room.getPlayers()
+
+    updatedPlayers.forEach(player => {
+      let points = 0
+      for (let i=0; i < players.length; i++) {
+        if (player._id.toString() == players[i]._id.toString()) {
+          points = player_points[i]
+          break;
+        }
+      }
+
+      expect(player.points).toBe(points)
+    })
+  }
+})
+
 test("End Turn before the time", async () => {
   let game = new Game(database)
   await game.init()
