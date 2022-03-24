@@ -3,12 +3,15 @@ const settings = require('./settings.js')
 const Player = require('./player.js')
 
 const initialRoom = {
-status: settings.room.status.CREATED,
+  status: settings.room.status.CREATED,
   cards: [],
   current_player: null,
   chosen_cards: [],
+  tip: null,
   correct_card: null,
-  guessed_cards: []
+  guessed_cards: [],
+  shuffled_cards: [],
+  turn: 0
 }
 
 class Room {
@@ -44,9 +47,12 @@ class Room {
     return this._update({status: status})
   }
 
-  async getPlayers() {
-    var options = {sort: {_id: 1}}
-    var players = this.playersCollection.find({room:this.code}, options)
+  async getPlayers(filtered) {
+    const options = {sort: {_id: 1}}
+    let players = this.playersCollection.find({room:this.code}, options)
+    if (filtered) {
+      players = players.project({cards: false, socket_id: false, _id: false})
+    }
     return players.toArray()
   }
 
@@ -60,6 +66,10 @@ class Room {
 
   async setCards(cards) {
     return this._update({cards: cards})
+  }
+
+  async setShuffledCards(shuffledCards) {
+    return this._update({shuffled_cards: shuffledCards})
   }
 
   async setCurrentPlayer(player_id) {
@@ -95,17 +105,18 @@ class Room {
       let choose = data.chosen_cards[i]
         if (choose.player.toString() == playerId) {
           can = false
-            break
+          break
         }
     }
     return can
   }
 
-  async setChosenCard(card) {
+  async setChosenCard(card, tip) {
     let updatedData = {
       chosen_cards: [
         { card: card, player: await this.getCurrentPlayerId() }
       ],
+      tip: tip,
       status: settings.room.status.CHOOSE_SIMILAR_CARD,
       correct_card: card
     }
@@ -173,7 +184,16 @@ class Room {
   }
 
   async endTurn() {
-    return this._update({chosen_cards: [], guessed_cards:[], correct_card: null, status: settings.room.status.STARTED})
+    let data = await this.getData()
+    return this._update({
+      chosen_cards: [],
+      tip: null,
+      guessed_cards:[],
+      correct_card: null,
+      status: settings.room.status.STARTED,
+      shuffled_cards: [],
+      turn: data.turn + 1
+    })
   }
 
   async resetAll() {
@@ -185,6 +205,10 @@ class Room {
     }
     promisses.push(this._update(initialRoom))
     return Promise.allSettled(promisses)
+  }
+
+  async hasEnoughCards() {
+    return (await this.getData()).cards.length >= await this._getNumberOfPlayers()
   }
 
   // PRIVATE METHODS

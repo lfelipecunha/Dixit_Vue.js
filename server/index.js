@@ -1,31 +1,32 @@
-import express from "express"
-import cors from "cors"
-import {Server as SocketServer} from "socket.io"
-import http from "http"
-import session from "express-session"
-import memorystore from "memorystore"
-import Game from "./game.js"
-import mongo from "mongodb"
+const express = require("express")
+const cors = require("cors")
+const SocketServer = require('socket.io').Server
+const http = require("http")
+const session = require("express-session")
+const memorystore = require("memorystore")
+const mongo = require("mongodb")
 
+const Game = require("./game.js")
+const Player = require("./player.js")
 
-var MemoryStore = memorystore(session)
+const MemoryStore = memorystore(session)
 
 const sessionMiddleware = session({
-    store: new MemoryStore(),
-    secret: 'keyboard cat', 
-    cookie: { maxAge: 60000 }
+  store: new MemoryStore(),
+  secret: 'keyboard cat',
+  cookie: { maxAge: 60000 }
 });
 
-var app = express()
+const app = express()
 
-var httpServer = http.createServer(app)
-var io = new SocketServer(httpServer, {
-    cors: {
-        origin: ["http://localhost:8080"],
-        methods: ["GET", "POST"],
-        credentials: true
-    },
-    allowEIO3: true
+const httpServer = http.createServer(app)
+const io = new SocketServer(httpServer, {
+  cors: {
+    origin: ["http://localhost:8080"],
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  allowEIO3: true
 })
 
 app.use(cors())
@@ -37,165 +38,181 @@ io.use((socket, next) => {
   sessionMiddleware(socket.request, {}, next);
 });
 
-var dbClient = new mongo.MongoClient("mongodb://database:27017")
-await dbClient.connect()
-var dataBase = dbClient.db("dixit_game")
-var game = new Game(dataBase);
-io.on('connection', (socket) => {
-    const sock_session = socket.request.session
-    socket.on('CreateRoom', () => {
-        game.createRoom().then((room) => {
-            socket.emit("RoomCreated", room)
-        })
-    })
+const dbClient = new mongo.MongoClient("mongodb://database:27017")
+let dataBase = null
 
-    // When a new socket joined to a specific room
-    socket.on('JoinRoom', (data) => {
-        console.log('Session', sock_session)
-        if (data.room && (data.name || data.rejoin)) {
-            game.joinRoom(
-                data.name, 
-                data.room, 
-                sock_session.room, 
-                sock_session.socket_id,
-                socket.id,
-                data.rejoin
-            ).then((joined) => {
-                console.log("Joined?", joined)
-                if (joined) {
-                    sock_session.socket_id = socket.id
-                    sock_session.room = data.room
-                    console.log("Saved?", sock_session.save((attr) => {
-                        console.log(attr)
-                    }))
-                    socket.join(data.room)
-                    socket.emit("Joined", data.room)
-                    game.getPlayerBySocketId(socket.id).then((player) => {
-                        console.log('Player', player)
-                        socket.emit("UpdatePlayer", player)
-                        game.getPlayersList(data.room, false).then((players_list) => {
-                            io.to(data.room).emit("PlayersList", players_list)
-                        })
-                    })
-                } else {
-                    socket.emit("NotJoined")
-                }
-            })
+io.on('connection', async (socket) => {
+  let game = null
+  let player = null
+  let roomCode = null
+
+  const sock_session = socket.request.session
+
+  socket.on('CreateRoom', async () => {
+    game = new Game(dataBase);
+    await game.init()
+    socket.emit("NewRoom", game.room.code)
+  })
+
+  socket.on('Join', async(data) => {
+    try {
+      if (!!data?.room) {
+        game = new Game(dataBase, data.room)
+        await game.init()
+      } else if (game == null) {
+        throw "Please inform a room!"
+      }
+
+      player = await game.join(data?.name, socket.id)
+      if (player === false) {
+        player = null
+        throw "An error occcurs on join to room!"
+      }
+      roomCode = (await game.room.getData()).room
+      socket.join(game.room.code)
+      socket.emit("Joined", game.room.code)
+    } catch (e) {
+      console.error(e)
+      socket.emit('Error', e)
+    }
+  })
+
+  socket.on("StartGame", async () => {
+    try {
+      if (!!game && await game.start()) {
+        console.log("Game Started")
+        io.to(roomCode).emit("GameStarted")
+        let players = await game.room.getPlayers()
+        for (let p in players) {
+          io.to(players[p].socket_id).emit("UpdatePlayer", players[p])
         }
-    })
 
-    socket.on("StartGame", () => {
-        var room = sock_session.room
-        console.log(sock_session)
-        console.log("Room", room)
-        game.startGame(room).then((started) => {
-            if (started) {
-                console.log("Game Started")
-                io.to(room).emit("GameStarted")
-                game.getPlayersList(room, true).then((players) => {
-                    for (var p in players) {
-                        var player  = players[p]
-                        console.log('Player', player)
-                        io.to(player.socket_id).emit("UpdatePlayer", player)
-                    }
-                })
+        let nextPlayer = await game.nextPlayer()
+        io.to((await nextPlayer.getData()).socket_id).emit("MyTurn")
+        let playersList = await game.room.getPlayers(true)
+        io.to(roomCode).emit("PlayersList", playersList)
+      } else {
+        throw "An error occurs on start game"
+      }
+    } catch (e) {
+      console.error(e)
+      socket.emit('Error', e)
+    }
+  })
 
-                game.nextPlayer(room).then((player) => {
-                    io.to(player.socket_id).emit("MyTurn")
-                    game.getPlayersList(room, false).then((players_list) => {
-                        io.to(room).emit("PlayersList", players_list)
-                    })
-                })
-            } else {
-                socket.emit("NotStarted")
-            }
-            
-        })
-        
-    })
+  socket.on("ChosenCard", async (data) => {
+    try {
+      if (!data?.card) {
+        throw 'You need to send a card!'
+      }
 
-    socket.on("ChosenCard", (data) => {
-        if (data.card && data.sugestion) {
-            game.chosenCard(sock_session.room, data.card, socket.id).then((result) => {
-                if (result) {
-                    io.to(sock_session.room).emit("ChooseSimilarCard", {sugestion: data.sugestion})
-                    game.getPlayersList(sock_session.room, false).then((players_list) => {
-                        io.to(room).emit("PlayersList", players_list)
-                    })
-                }
-            })
+      if (!data?.tip) {
+        throw 'You need to send a tip'
+      }
+      if (!await game.chosenCard(player, data.card, data.tip)) {
+        throw 'An error occurs on choose a card!'
+      }
+      io.to(game.room.code).emit("ChooseSimilarCard", {tip: data.tip})
+      const playersList = await game.room.getPlayers(true)
+      io.to(game.room.code).emit("PlayersList", playersList)
+    } catch (e) {
+      console.error(e)
+      socket.emit('Error', e)
+    }
+  })
+
+  socket.on("SimilarCardChosen", async (data) => {
+    try {
+      if (!data?.card) {
+        throw 'You need to send a card!'
+      }
+      if (!await game.similarCardChosen(player, data.card)) {
+        throw 'An error occurs on choose a similar card!'
+      }
+      if (await game.room.areAllPlayersReady()) {
+        let cards = await game.endChooseAndGetCards()
+        io.to(game.room.code).emit("FindTheChosenCards", cards)
+        let playersList = await game.room.getPlayers(true)
+        io.to(game.room.code).emit("PlayersList", playersList)
+      }
+    } catch (e) {
+      console.error(e)
+      socket.emit('Error', e)
+    }
+  })
+
+  socket.on("GuessedCard", async (data) => {
+    try {
+      if (!data?.card) {
+        throw 'You need to send a card!'
+      }
+      if (! await game.guessedCard(player, data.card)) {
+        throw 'An error occurs on guess a card!'
+      }
+      if (await game.room.areAllPlayersReady()) {
+        await game.endTurn()
+        io.to(game.room.code).emit("EndOfTurn")
+
+        if (await game.isEndOfGame()) {
+          let podium = await game.end()
+          io.to(game.room.code).emit('EndGame', {podium: podium})
+        } else {
+          let nextPlayer = await game.nextPlayer()
+          let players = await game.room.getPlayers()
+          for (var p in players) {
+            io.to(players[p].socket_id).emit("UpdatePlayer", players[p])
+          }
+
+          io.to((await currenPlayer.getData()).socket_id).emit("MyTurn")
+          let playerList = await game.room.getPlayers()
+          io.to(game.room.code).emit("PlayersList", playersList)
         }
-    })
+      }
 
-    socket.on("SimilarCardChosen", (data) => {
-        if (data.card) {
-            game.similarCardChosen(sock_session.room, data.card, socket.id).then(() => {
-                game.areAllPlayersWaiting(sock_session.room).then((result) => {
-                    if (result) {
-                        game.endChooseAndGetCards(socket.room).then((cards) => {
-                            io.to(sock_session.room).emit("FindTheChosenCards", cards)
-                            game.getPlayersList(sock_session.room, false).then((players_list) => {
-                                io.to(sock_session.room).emit("PlayersList", players_list)
-                            })
-                        })
-                    }
-                })
-            })
-        }
-    })
+    } catch (e) {
+      console.error(e)
+      socket.emit('Error', e)
+    }
+  })
 
-    socket.on("guessed_card", (data) => {
-        if (data.card) {
-            game.guessedCard(sock_session.room, data.card, socket.id).then((result) => {
-                if (result) {
-                    game.areAllPlayersWaiting(sock_session.room).then((ended) => {
-                        if (ended) {
-                            game.endTurn(sock_session.room).then(() => {
-                                game.nextPlayer(sock_session.room).then((curren_player) => {
-                                    game.getPlayersList(sock_session.room, true).then((players) => {
-                                        for (var p in players) {
-                                            var player  = players[p]
-                                            io.to(player.socket_id).emit("UpdatePlayer", player)
-                                        }
-                                        io.to(curren_player.socket_id).emit("MyTurn")
-                                    })
+  socket.on('OldSocketId', async (socketId) => {
+    let p = await Game.createPlayerBySocketId(dataBase, socketId, socket.id)
+    console.log(p)
+    if (!!p) {
+      player = p
+      game = new Game(dataBase, await player.room.getCode())
+      socket.emit('UpdatePlayer', await player.getData())
+      const status = await player.restoreStatus()
+      console.log(status)
+      if (status.chooseCard) {
+        socket.emit('MyTurn')
+      } else if (status.chooseSimiliarCard) {
+        socket.emit('ChooseSimilarCard', {tip: (await game.room.getData()).tip})
+      } else if (status.guessCard) {
+        socket.emit('FindTheChosenCards',(await game.room.getData()).shuffled_cards)
+      }
+      let playersList = await game.room.getPlayers(true)
+      io.to(game.room.code).emit("PlayersList", playersList)
+    }
+  })
 
-                                    game.getPlayersList(sock_session.room, false).then((players_list) => {
-                                        io.to(sock_session.room).emit("PlayersList", players_list)
-                                    })
-                                })
-                            })
-                        }
-                    })
-                }
-            })
-        }
-        // @TODO idetify when all players have already guessed the card, befor emit this event
-        io.emit("end_of_turn")
-
-        //@TODO determine the next player
-        socket.emit("your_turn")
-
-        //@TODO determine when the game is over
-    })
-
-    socket.on('disconnect', () => {
-        var room = sock_session.room
-        if (room) {
-            game.isStarded(room).then((started) => {
-                game.removePlayer(socket.id, room, !started).then(() => {
-                    game.getPlayersList(room,false).then((players_list) => {
-                        io.to(room).emit("PlayersList", players_list)
-                    })
-                })
-            })
-        }
-    })
+  socket.on('disconnect', async () => {
+    if (!!player) {
+      await player.remove()
+    }
+  })
 
 })
 
 app.get("/ping", (_, res) => {
-    res.send()
+  const fs = require('fs')
+  const path = require('path')
+
+  const html = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf8')
+  res.send(html)
 })
 
-httpServer.listen("8081")
+dbClient.connect().then(() => {
+  dataBase = dbClient.db("dixit_game")
+  httpServer.listen("8081")
+})

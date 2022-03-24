@@ -3,6 +3,14 @@ var Player = require("./player.js")
 var settings = require('./settings.js')
 
 class Game {
+  static async createPlayerBySocketId(database, oldSocketId, newSocketId) {
+    let collection = database.collection(settings.database.collections.PLAYERS)
+    let _, player = await collection.findOne({socket_id: oldSocketId})
+    if (!!player) {
+      await collection.updateOne({_id: player._id}, {$set: {socket_id: newSocketId}})
+      return new Player(database, newSocketId, new Room(database, player.room))
+    }
+  }
   constructor(db, roomCode) {
     this.database = db
     this.room = new Room(db, roomCode)
@@ -95,29 +103,12 @@ class Game {
     var players = await this.room.getPlayers()
     var totalOfCards = settings.game.MAXIMUM_CARDS - ( settings.game.MAXIMUM_CARDS % players.length )
     var cards = Array.from(Array(totalOfCards).keys())
-    cards = this.shuffle(cards)
+    cards = this._shuffle(cards)
     await this.room.setCards(cards)
-    await this.distributeCards(settings.game.HAND_SIZE)
+    await this._distributeCards(settings.game.HAND_SIZE)
     return true
   }
 
-  async distributeCards(amount) {
-    var room = await this.room.getData()
-    var players = await this.room.getPlayers()
-    for (var i=0; i < amount; i++) {
-      for (var p in players) {
-        var player = players[p]
-          player.cards.push(room.cards.shift())
-      }
-    }
-    var promises = []
-    for (var p in players) {
-      let playerObj = new Player(this.database, players[p].socket_id, this.room)
-      promises.push(playerObj.setHand(players[p].cards))
-    }
-    promises.push(this.room.setCards(room.cards))
-    await Promise.allSettled(promises)
-  }
 
   async nextPlayer() {
     var players = await this.room.getPlayers()
@@ -154,14 +145,14 @@ class Game {
     return new Player(this.database, currentPlayer.socket_id, this.room)
   }
 
-  async chosenCard(player, card) {
+  async chosenCard(player, card, tip) {
     if (! await this.room.canChooseACard(player)) {
       return false
     }
     if (! await player.chooseCard(card)) {
       return false
     }
-    await this.room.setChosenCard(card)
+    await this.room.setChosenCard(card, tip)
 
     return true
   }
@@ -201,7 +192,10 @@ class Game {
       }
     }
     await Promise.allSettled(promises)
-    return this.shuffle(room.chosen_cards.map((value) => {return value.card}))
+    const shuffledCards = this._shuffle(room.chosen_cards.map((value) => {return value.card}))
+    this.room.setShuffledCards(shuffledCards)
+    return shuffledCards
+
   }
 
   async guessedCard(player, card) {
@@ -270,7 +264,7 @@ class Game {
     promises.push(this.room.endTurn())
 
     await Promise.allSettled(promises)
-    await this.distributeCards(1)
+    await this._distributeCards(1)
     return true
   }
 
@@ -283,7 +277,12 @@ class Game {
     return players
   }
 
-  shuffle(array) {
+  async isEndOfGame() {
+    return !this.room.hasEnoughCards()
+  }
+
+  // PRIVATE METHODS
+  _shuffle(array) {
     var currentIndex = array.length;
 
     // While there remain elements to shuffle...
@@ -297,6 +296,24 @@ class Game {
     }
 
     return array;
+  }
+
+  async _distributeCards(amount) {
+    var room = await this.room.getData()
+    var players = await this.room.getPlayers()
+    for (var i=0; i < amount; i++) {
+      for (var p in players) {
+        var player = players[p]
+          player.cards.push(room.cards.shift())
+      }
+    }
+    var promises = []
+    for (var p in players) {
+      let playerObj = new Player(this.database, players[p].socket_id, this.room)
+      promises.push(playerObj.setHand(players[p].cards))
+    }
+    promises.push(this.room.setCards(room.cards))
+    await Promise.allSettled(promises)
   }
 }
 

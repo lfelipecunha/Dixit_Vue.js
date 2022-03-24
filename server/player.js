@@ -1,4 +1,4 @@
-var settings = require('./settings.js')
+const settings = require('./settings.js')
 
 const initialData = {
   game_status: settings.player.game_status.WAITING,
@@ -7,6 +7,7 @@ const initialData = {
 }
 
 class Player {
+
   constructor(db, socket_id, room) {
     if (!socket_id) {
       throw new Error("It's required to pass a socket ID")
@@ -16,6 +17,7 @@ class Player {
     this.socket_id = socket_id
     this.room = room
   }
+
 
   async getData() {
     return this._getPlayerBySocketId(this.socket_id)
@@ -66,6 +68,46 @@ class Player {
 
   async reset() {
     return this._update(initialData)
+  }
+
+  async remove() {
+    let isStarted = await this.room.isStarted()
+    if (isStarted) {
+      return this._update({status: settings.player.status.INACTIVE})
+    }
+
+    return await this.collection.deleteOne({socket_id: this.socket_id})
+  }
+
+  async restoreStatus() {
+    const roomData = await this.room.getData()
+    const data = await this.getData()
+    const id = data._id.toString()
+    let status = {
+      chooseCard: false,
+      chooseSimiliarCard: false,
+      guessCard: false
+    }
+    if (roomData.current_player.toString() == id) {
+      status.chooseCard = true
+    } else if (roomData.status == settings.room.status.CHOOSE_SIMILAR_CARD) {
+      status.chooseSimiliarCard = true
+      for (let i in roomData.chosen_cards) {
+        if (roomData.chosen_cards[i].player.id.toString() == id) {
+          status.chooseSimiliarCard = false
+          break
+        }
+      }
+    } else if (roomData.status == settings.room.status.FIND_THE_CHOSEN_CARD) {
+      status.guessCard = true
+      for (let i in roomData.guessed_cards) {
+        if (roomData.guessed_cards[i].player.id.toString() == id) {
+          status.guessCard = false
+          break
+        }
+      }
+    }
+    return status
   }
 
   // PRIVATE METHODS
