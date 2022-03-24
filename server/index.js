@@ -2,20 +2,11 @@ const express = require("express")
 const cors = require("cors")
 const SocketServer = require('socket.io').Server
 const http = require("http")
-const session = require("express-session")
 const memorystore = require("memorystore")
 const mongo = require("mongodb")
 
 const Game = require("./game.js")
 const Player = require("./player.js")
-
-const MemoryStore = memorystore(session)
-
-const sessionMiddleware = session({
-  store: new MemoryStore(),
-  secret: 'keyboard cat',
-  cookie: { maxAge: 60000 }
-});
 
 const app = express()
 
@@ -31,13 +22,6 @@ const io = new SocketServer(httpServer, {
 
 app.use(cors())
 
-// register middleware in Express
-app.use(sessionMiddleware);
-
-io.use((socket, next) => {
-  sessionMiddleware(socket.request, {}, next);
-});
-
 const dbClient = new mongo.MongoClient("mongodb://database:27017")
 let dataBase = null
 
@@ -46,12 +30,12 @@ io.on('connection', async (socket) => {
   let player = null
   let roomCode = null
 
-  const sock_session = socket.request.session
+  socket.emit('Connected')
 
   socket.on('CreateRoom', async () => {
     game = new Game(dataBase);
     await game.init()
-    socket.emit("NewRoom", game.room.code)
+    socket.emit("NewRoom", game.room.getCode())
   })
 
   socket.on('Join', async(data) => {
@@ -69,8 +53,8 @@ io.on('connection', async (socket) => {
         throw "An error occcurs on join to room!"
       }
       roomCode = (await game.room.getData()).room
-      socket.join(game.room.code)
-      socket.emit("Joined", game.room.code)
+      socket.join(game.room.getCode())
+      socket.emit("Joined", game.room.getCode())
     } catch (e) {
       console.error(e)
       socket.emit('Error', e)
@@ -102,7 +86,7 @@ io.on('connection', async (socket) => {
 
   socket.on("ChosenCard", async (data) => {
     try {
-      if (!data?.card) {
+      if (!data?.card && data?.card !== 0) {
         throw 'You need to send a card!'
       }
 
@@ -112,9 +96,9 @@ io.on('connection', async (socket) => {
       if (!await game.chosenCard(player, data.card, data.tip)) {
         throw 'An error occurs on choose a card!'
       }
-      io.to(game.room.code).emit("ChooseSimilarCard", {tip: data.tip})
+      io.to(game.room.getCode()).emit("ChooseSimilarCard", {tip: data.tip})
       const playersList = await game.room.getPlayers(true)
-      io.to(game.room.code).emit("PlayersList", playersList)
+      io.to(game.room.getCode()).emit("PlayersList", playersList)
     } catch (e) {
       console.error(e)
       socket.emit('Error', e)
@@ -123,7 +107,7 @@ io.on('connection', async (socket) => {
 
   socket.on("SimilarCardChosen", async (data) => {
     try {
-      if (!data?.card) {
+      if (!data?.card && data?.card !== 0) {
         throw 'You need to send a card!'
       }
       if (!await game.similarCardChosen(player, data.card)) {
@@ -131,9 +115,9 @@ io.on('connection', async (socket) => {
       }
       if (await game.room.areAllPlayersReady()) {
         let cards = await game.endChooseAndGetCards()
-        io.to(game.room.code).emit("FindTheChosenCards", cards)
+        io.to(game.room.getCode()).emit("FindTheChosenCards", cards)
         let playersList = await game.room.getPlayers(true)
-        io.to(game.room.code).emit("PlayersList", playersList)
+        io.to(game.room.getCode()).emit("PlayersList", playersList)
       }
     } catch (e) {
       console.error(e)
@@ -143,7 +127,7 @@ io.on('connection', async (socket) => {
 
   socket.on("GuessedCard", async (data) => {
     try {
-      if (!data?.card) {
+      if (!data?.card && data?.card !== 0) {
         throw 'You need to send a card!'
       }
       if (! await game.guessedCard(player, data.card)) {
@@ -151,11 +135,11 @@ io.on('connection', async (socket) => {
       }
       if (await game.room.areAllPlayersReady()) {
         await game.endTurn()
-        io.to(game.room.code).emit("EndOfTurn")
+        io.to(game.room.getCode()).emit("EndOfTurn")
 
         if (await game.isEndOfGame()) {
           let podium = await game.end()
-          io.to(game.room.code).emit('EndGame', {podium: podium})
+          io.to(game.room.getCode()).emit('EndGame', {podium: podium})
         } else {
           let nextPlayer = await game.nextPlayer()
           let players = await game.room.getPlayers()
@@ -163,9 +147,9 @@ io.on('connection', async (socket) => {
             io.to(players[p].socket_id).emit("UpdatePlayer", players[p])
           }
 
-          io.to((await currenPlayer.getData()).socket_id).emit("MyTurn")
-          let playerList = await game.room.getPlayers()
-          io.to(game.room.code).emit("PlayersList", playersList)
+          io.to((await nextPlayer.getData()).socket_id).emit("MyTurn")
+          let playersList = await game.room.getPlayers(true)
+          io.to(game.room.getCode()).emit("PlayersList", playersList)
         }
       }
 
@@ -177,10 +161,10 @@ io.on('connection', async (socket) => {
 
   socket.on('OldSocketId', async (socketId) => {
     let p = await Game.createPlayerBySocketId(dataBase, socketId, socket.id)
-    console.log(p)
     if (!!p) {
       player = p
-      game = new Game(dataBase, await player.room.getCode())
+      game = new Game(dataBase, player.room.getCode())
+      socket.join(game.room.getCode())
       socket.emit('UpdatePlayer', await player.getData())
       const status = await player.restoreStatus()
       console.log(status)
@@ -192,13 +176,15 @@ io.on('connection', async (socket) => {
         socket.emit('FindTheChosenCards',(await game.room.getData()).shuffled_cards)
       }
       let playersList = await game.room.getPlayers(true)
-      io.to(game.room.code).emit("PlayersList", playersList)
+      io.to(game.room.getCode()).emit("PlayersList", playersList)
     }
   })
 
   socket.on('disconnect', async () => {
     if (!!player) {
       await player.remove()
+      let playersList = await game.room.getPlayers(true)
+      io.to(game.room.getCode()).emit("PlayersList", playersList)
     }
   })
 

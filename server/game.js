@@ -278,7 +278,7 @@ class Game {
   }
 
   async isEndOfGame() {
-    return !this.room.hasEnoughCards()
+    return ! await this.room.hasEnoughCards()
   }
 
   // PRIVATE METHODS
@@ -301,6 +301,11 @@ class Game {
   async _distributeCards(amount) {
     var room = await this.room.getData()
     var players = await this.room.getPlayers()
+
+    if (room.cards.length < players.length) { // do not distribute when there are no cards
+      return
+    }
+
     for (var i=0; i < amount; i++) {
       for (var p in players) {
         var player = players[p]

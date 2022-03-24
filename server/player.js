@@ -107,6 +107,7 @@ class Player {
         }
       }
     }
+    await this._update({status: settings.player.status.ACTIVE})
     return status
   }
 
