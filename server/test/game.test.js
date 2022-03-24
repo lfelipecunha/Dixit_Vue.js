@@ -205,7 +205,7 @@ test("Cards distribution", async () => {
   var room = await game.room.getData()
   var players = await game.room.getPlayers()
 
-  await game.distributeCards(1)
+  await game._distributeCards(1)
 
   var updatedRoom = await game.room.getData()
   var updatedPlayers = await game.room.getPlayers()
