@@ -7,13 +7,14 @@ const mongo = require("mongodb")
 
 const Game = require("./game.js")
 const Player = require("./player.js")
+const settings = require('./settings.js')
 
 const app = express()
 
 const httpServer = http.createServer(app)
 const io = new SocketServer(httpServer, {
   cors: {
-    origin: ["http://localhost:8080"],
+    origin: ["http://192.168.15.112", 'http://localhost'],
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -41,23 +42,26 @@ io.on('connection', async (socket) => {
   socket.on('Join', async(data) => {
     try {
       if (!!data?.room) {
-        game = new Game(dataBase, data.room)
+        game = new Game(dataBase, data.room.toLowerCase())
         await game.init()
       } else if (game == null) {
-        throw "Please inform a room!"
+        throw new Error("Please inform a room!")
       }
 
       player = await game.join(data?.name, socket.id)
       if (player === false) {
         player = null
-        throw "An error occcurs on join to room!"
+        throw new Error("An error occcurs on join to room!")
       }
       roomCode = (await game.room.getData()).room
       socket.join(game.room.getCode())
-      socket.emit("Joined", game.room.getCode())
+      socket.emit("Joined", {room: game.room.getCode(), minimalPlayers: settings.room.MIN_PLAYERS})
+      socket.emit("UpdatePlayer", await player.getData())
+      let playersList = await game.room.getPlayers(true)
+      io.to(game.room.getCode()).emit("PlayersList", playersList)
     } catch (e) {
       console.error(e)
-      socket.emit('Error', e)
+      socket.emit('Error', e.message)
     }
   })
 
@@ -65,7 +69,7 @@ io.on('connection', async (socket) => {
     try {
       if (!!game && await game.start()) {
         console.log("Game Started")
-        io.to(roomCode).emit("GameStarted")
+        io.to(game.room.getCode()).emit("GameStarted")
         let players = await game.room.getPlayers()
         for (let p in players) {
           io.to(players[p].socket_id).emit("UpdatePlayer", players[p])
@@ -74,7 +78,7 @@ io.on('connection', async (socket) => {
         let nextPlayer = await game.nextPlayer()
         io.to((await nextPlayer.getData()).socket_id).emit("MyTurn")
         let playersList = await game.room.getPlayers(true)
-        io.to(roomCode).emit("PlayersList", playersList)
+        io.to(game.room.getCode()).emit("PlayersList", playersList)
       } else {
         throw "An error occurs on start game"
       }
@@ -99,6 +103,10 @@ io.on('connection', async (socket) => {
       io.to(game.room.getCode()).emit("ChooseSimilarCard", {tip: data.tip})
       const playersList = await game.room.getPlayers(true)
       io.to(game.room.getCode()).emit("PlayersList", playersList)
+      let players = await game.room.getPlayers()
+      for (var p in players) {
+        io.to(players[p].socket_id).emit("UpdatePlayer", players[p])
+      }
     } catch (e) {
       console.error(e)
       socket.emit('Error', e)
@@ -115,10 +123,17 @@ io.on('connection', async (socket) => {
       }
       if (await game.room.areAllPlayersReady()) {
         let cards = await game.endChooseAndGetCards()
-        io.to(game.room.getCode()).emit("FindTheChosenCards", cards)
-        let playersList = await game.room.getPlayers(true)
-        io.to(game.room.getCode()).emit("PlayersList", playersList)
+        io.to(game.room.getCode()).emit("FindTheChosenCard", {cards: cards, tip: (await game.room.getData()).tip})
+        let playersList = await game.room.getPlayers()
+        for (let p of playersList) {
+          console.log(p)
+          io.to(p.socket_id).emit('UpdatePlayer', p)
+        }
+      } else {
+        socket.emit('UpdatePlayer', await player.getData())
       }
+      let playersList = await game.room.getPlayers(true)
+      io.to(game.room.getCode()).emit("PlayersList", playersList)
     } catch (e) {
       console.error(e)
       socket.emit('Error', e)
@@ -148,10 +163,12 @@ io.on('connection', async (socket) => {
           }
 
           io.to((await nextPlayer.getData()).socket_id).emit("MyTurn")
-          let playersList = await game.room.getPlayers(true)
-          io.to(game.room.getCode()).emit("PlayersList", playersList)
         }
+      } else {
+        socket.emit('UpdatePlayer', await player.getData())
       }
+      let playersList = await game.room.getPlayers(true)
+      io.to(game.room.getCode()).emit("PlayersList", playersList)
 
     } catch (e) {
       console.error(e)
@@ -165,18 +182,25 @@ io.on('connection', async (socket) => {
       player = p
       game = new Game(dataBase, player.room.getCode())
       socket.join(game.room.getCode())
+      socket.emit("Joined", {room: game.room.getCode(), minimalPlayers: settings.room.MIN_PLAYERS})
+      socket.emit("GameStarted");
       socket.emit('UpdatePlayer', await player.getData())
       const status = await player.restoreStatus()
       console.log(status)
       if (status.chooseCard) {
         socket.emit('MyTurn')
-      } else if (status.chooseSimiliarCard) {
+      }
+
+      if (status.chooseSimiliarCard) {
         socket.emit('ChooseSimilarCard', {tip: (await game.room.getData()).tip})
       } else if (status.guessCard) {
-        socket.emit('FindTheChosenCards',(await game.room.getData()).shuffled_cards)
+        let roomData = await game.room.getData()
+        socket.emit('FindTheChosenCard',{cards: roomData.shuffled_cards, tip: roomData.tip})
       }
       let playersList = await game.room.getPlayers(true)
       io.to(game.room.getCode()).emit("PlayersList", playersList)
+    } else {
+      socket.emit('InvalidSocketId')
     }
   })
 

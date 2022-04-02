@@ -1,0 +1,23 @@
+<html>
+  <head>
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js" integrity="sha384-fKnu0iswBIqkjxrhQCTZ7qlLHOFEgNkRmK2vaO/LbTZSXdJfAu6ewRBdwHPhBo/H" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    Oi
+    <script type="text/javascript">
+      const socket = io()
+
+      setTimeout(() => {
+        window.cookieStore.get('socket_id').then( socket_id => {
+          if (!!socket_id) {
+            socket.emit('OldSocketId', socket_id.value)
+          }
+        })
+        window.cookieStore.set('socket_id', socket.id)
+      }, 1000)
+      socket.onAny((eventName, ...args) => {
+        console.log(eventName, args);
+      })
+    </script>
+  </body>
+</html>

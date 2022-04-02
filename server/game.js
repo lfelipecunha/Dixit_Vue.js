@@ -269,7 +269,7 @@ class Game {
   }
 
   async end() {
-    let players = await this.room.getPlayers()
+    let players = await this.room.getPlayers(true)
     players.sort((a, b) => {
       return b.points - a.points
     })
@@ -278,7 +278,7 @@ class Game {
   }
 
   async isEndOfGame() {
-    return ! await this.room.hasEnoughCards()
+    return ! await this.room.hasEnoughCards() && await this.room.areUsersHandsEmpty()
   }
 
   // PRIVATE METHODS

@@ -29,7 +29,7 @@ const settings = Object.freeze({
     },
     'game': {
         'HAND_SIZE': 6,
-        'MAXIMUM_CARDS': 52,
+        'MAXIMUM_CARDS': 99,
     }
 })
 

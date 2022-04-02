@@ -1,27 +1,35 @@
-import Vue from 'vue'
-import VueRouter from 'vue-router'
-import Home from '../views/Home.vue'
-import Player from '../views/Player.vue'
+import { createRouter, createWebHistory } from 'vue-router'
+import HomeView from '../views/HomeView.vue'
+import { useCookies } from "vue3-cookies";
 
-Vue.use(VueRouter)
-
+const { cookies } = useCookies();
 const routes = [
   {
     path: '/',
-    name: 'Home',
-    component: Home
+    name: 'home',
+    component: HomeView
   },
   {
-    path: '/room/:id/player',
-    name: 'Player',
-    component: Player
+    path: '/player-hand',
+    name: 'player-hand',
+    // route level code-splitting
+    // this generates a separate chunk (about.[hash].js) for this route
+    // which is lazy-loaded when the route is visited.
+    component: () => import(/* webpackChunkName: "about" */ '../views/PlayerHandView.vue')
   }
 ]
 
-const router = new VueRouter({
-  mode: 'history',
-  base: process.env.BASE_URL,
+const router = createRouter({
+  history: createWebHistory(process.env.BASE_URL),
   routes
+});
+
+router.beforeEach((to, from, next) => {
+  if (to.name == 'home' && cookies.get('dixit_game_socket_id') != null) {
+    next('player-hand');
+    return;
+  }
+  next();
 })
 
 export default router

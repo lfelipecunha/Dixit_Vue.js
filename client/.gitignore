@@ -1,7 +1,8 @@
 .DS_Store
 node_modules
 /dist
-/src/assets/cards
+
+src/assets/cards
 
 # local env files
 .env.local

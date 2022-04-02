@@ -25,7 +25,7 @@ class Room {
   async init() {
     if (this.code) {
       if (! await this._exists(this.code)) {
-        throw new Error("Invalid room code: " & this.code)
+        throw new Error("Invalid room code: " + this.code)
       }
     } else {
       this.code = await this._create()
@@ -112,15 +112,22 @@ class Room {
   }
 
   async setChosenCard(card, tip) {
+    let currentPlayerId = await this.getCurrentPlayerId()
     let updatedData = {
       chosen_cards: [
-        { card: card, player: await this.getCurrentPlayerId() }
+        { card: card, player: currentPlayerId}
       ],
       tip: tip,
       status: settings.room.status.CHOOSE_SIMILAR_CARD,
       correct_card: card
     }
-    return this._update(updatedData)
+    if (!await this._update(updatedData)) {
+      return false
+    }
+
+    await this.playersCollection.updateMany({room: this.code, _id: {$ne: currentPlayerId}}, {$set: {game_status: settings.player.game_status.WAITING}})
+
+    return true
   }
 
   async addChosenCard(player, card) {
@@ -209,6 +216,10 @@ class Room {
 
   async hasEnoughCards() {
     return (await this.getData()).cards.length >= await this._getNumberOfPlayers()
+  }
+
+  async areUsersHandsEmpty() {
+    return (await this.getPlayers())[0].cards.length == 0
   }
 
   // PRIVATE METHODS

@@ -1,8 +1,9 @@
 const settings = require('./settings.js')
 
 const initialData = {
-  game_status: settings.player.game_status.WAITING,
+  game_status: settings.player.game_status.IDDLE,
   cards: [],
+  chosen_card: null,
   points: 0
 }
 
@@ -58,12 +59,13 @@ class Player {
     data.cards.splice(index, 1)
     await this.setHand(data.cards)
     await this.setGameStatus(settings.player.game_status.READY)
+    await this._update({chosen_card: card})
 
     return true
   }
 
   async endTurn(points) {
-    return this._update({points: points, game_status: settings.player.game_status.WAITING})
+    return this._update({points: points, game_status: settings.player.game_status.IDDLE})
   }
 
   async reset() {
@@ -83,29 +85,10 @@ class Player {
     const roomData = await this.room.getData()
     const data = await this.getData()
     const id = data._id.toString()
-    let status = {
-      chooseCard: false,
-      chooseSimiliarCard: false,
-      guessCard: false
-    }
-    if (roomData.current_player.toString() == id) {
-      status.chooseCard = true
-    } else if (roomData.status == settings.room.status.CHOOSE_SIMILAR_CARD) {
-      status.chooseSimiliarCard = true
-      for (let i in roomData.chosen_cards) {
-        if (roomData.chosen_cards[i].player.id.toString() == id) {
-          status.chooseSimiliarCard = false
-          break
-        }
-      }
-    } else if (roomData.status == settings.room.status.FIND_THE_CHOSEN_CARD) {
-      status.guessCard = true
-      for (let i in roomData.guessed_cards) {
-        if (roomData.guessed_cards[i].player.id.toString() == id) {
-          status.guessCard = false
-          break
-        }
-      }
+    const status = {
+      chooseCard: roomData.current_player?.toString() == id,
+      chooseSimiliarCard: roomData.status == settings.room.status.CHOOSE_SIMILAR_CARD,
+      guessCard: roomData.status == settings.room.status.FIND_THE_CHOSEN_CARD
     }
     await this._update({status: settings.player.status.ACTIVE})
     return status
